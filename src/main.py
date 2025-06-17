@@ -1,55 +1,3 @@
-'''
-from fastapi import FastAPI, Request
-from sqlalchemy import text
-from src.users.router import router as user_router
-from src.database.core import engine
-from src.sql.migrations.migrations import (users,audit_logs)
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-from src.utils.response_builder import make_response
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,  # Logs everything: DEBUG, INFO, WARNING, ERROR, CRITICAL
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    handlers=[
-        logging.FileHandler("logs/app.log"),
-        logging.StreamHandler()
-    ]
-)
-
-logger = logging.getLogger(__name__)
-
-app = FastAPI()
-app.include_router(user_router)
-
-@app.exception_handler(RequestValidationError)
-async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
-    errors = exc.errors()
-    first_msg = errors[0].get("msg", "Validation error.") if errors else "Validation error."
-
-    return JSONResponse(
-        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
-        content=make_response(
-            data=None,
-            status=HTTP_422_UNPROCESSABLE_ENTITY,
-            message=first_msg
-        )
-    )
-
-@app.on_event("startup")
-def apply_migrations():
-    with engine.connect() as connection:
-        connection.execute(text(users))
-        connection.execute(text(audit_logs))
-
-@app.get("/healthcheck")
-def root():
-    logging.info("Test log from FastAPI")
-    return {"message": "I AM ALIVE"}
-'''
-
 from fastapi import FastAPI, Request
 from sqlalchemy import text
 from fastapi.exceptions import RequestValidationError
@@ -57,25 +5,24 @@ from fastapi.responses import JSONResponse
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from src.users.router import router as user_router
 from src.utils.response_builder import make_response
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    handlers=[
-        logging.FileHandler("logs/app.log"),
-        logging.StreamHandler()
-    ]
-)
-
-logger = logging.getLogger(__name__)
+from src.middlewares.sanitization import InputSanitizationMiddleware
+from src.middlewares.rate_limit import limiter, SlowAPIMiddleware
+from src.middlewares.logging import LoggingMiddleware
+from src.logger import logger
 
 app = FastAPI()
+
+app.add_middleware(InputSanitizationMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
 app.include_router(user_router)
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
+    logger.warning(f"Validation Error on {request.url}: {errors}")
     first_msg = errors[0].get("msg", "Validation error.") if errors else "Validation error."
 
     return JSONResponse(
@@ -85,5 +32,5 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
 
 @app.get("/healthcheck")
 def root():
-    logging.info("Test log from FastAPI")
+    logger.info("Healthcheck endpoint hit")
     return {"message": "I AM ALIVE"}
