@@ -61,10 +61,10 @@ jobs:
               rm -rf /opt/fastapi-logging
             fi
 
-            # Clone the repo via SSH if not already present
+            # Clone the repo via HTTPS if not already present
             if [ ! -d /opt/fastapi-logging ]; then
               echo "📁 Cloning repo from Vreij-Lal (dev branch)..."
-              git clone --branch dev git@github.com:Vreij-Lal/infra.git /opt/fastapi-logging
+              git clone --branch dev https://github.com/Vreij-Lal/infra.git /opt/fastapi-logging
             fi
 
             cd /opt/fastapi-logging
