@@ -13,7 +13,7 @@ from src.users.models import UserIn, UserOut
 from src.utils.response_builder import make_response
 from src.utils.response_models import GenericResponse
 from src.utils.exceptions import AppException
-from src.main import limiter
+from src.extensions.limiter import limiter
 from src.logger import logger
 
 load_dotenv()

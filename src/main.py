@@ -6,7 +6,8 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from src.users.router import router as user_router
 from src.utils.response_builder import make_response
 from src.middlewares.sanitization import InputSanitizationMiddleware
-from src.middlewares.rate_limit import limiter, SlowAPIMiddleware
+from src.extensions.limiter import limiter
+from slowapi.middleware import SlowAPIMiddleware
 from src.middlewares.logging import LoggingMiddleware
 from src.logger import logger
 
