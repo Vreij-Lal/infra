@@ -2,7 +2,7 @@ name: Build, Push Docker Image, and Deploy via SSH
 
 on:
   push:
-    branches: [main]
+    branches: [main]  # ✅ Updated to track `main` branch
 
 jobs:
   docker-build-push:
@@ -21,7 +21,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-actions-demo:dev-latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-actions-demo:main-latest  # Optional: Updated tag to reflect branch
 
   deploy-via-ssh:
     needs: docker-build-push
@@ -63,15 +63,19 @@ jobs:
 
             # Clone the repo via HTTPS if not already present
             if [ ! -d /opt/fastapi-logging ]; then
-              echo "📁 Cloning repo from Vreij-Lal (dev branch)..."
-              git clone --branch dev https://github.com/Vreij-Lal/infra.git /opt/fastapi-logging
+              echo "📁 Cloning repo from Vreij-Lal (main branch)..."
+              git clone --branch main https://github.com/Vreij-Lal/infra.git /opt/fastapi-logging
+              if [ $? -ne 0 ]; then
+                echo "❌ Failed to clone repo. Exiting."
+                exit 1
+              fi
             fi
 
             cd /opt/fastapi-logging
 
-            echo "🔄 Pulling latest dev code..."
-            git fetch origin dev
-            git reset --hard origin/dev
+            echo "🔄 Pulling latest main code..."
+            git fetch origin main
+            git reset --hard origin/main
 
             # Check if docker-compose.yml exists
             if [ ! -f docker-compose.yml ]; then
