@@ -36,64 +36,38 @@ jobs:
           script: |
             echo "🚀 Connecting to server..."
 
-            if [ "$(docker ps -aq -f name=fastapi-demo)" ]; then
-              echo "🧹 Removing old standalone container..."
-              docker stop fastapi-demo || true
-              docker rm fastapi-demo || true
-            fi
+            # 🗄️ Backup .env if exists
+            [ -f /opt/fastapi-logging/.env ] && cp /opt/fastapi-logging/.env /tmp/.env.bak
 
-            if ! docker compose version &>/dev/null; then
-              echo "🧩 Installing Docker Compose plugin..."
-              apt update && apt install -y docker-compose-plugin
-            fi
+            # ❌ Remove existing project folder to ensure fresh clone
+            rm -rf /opt/fastapi-logging
 
-            if ! command -v git &>/dev/null; then
-              echo "📦 Installing Git..."
-              apt update && apt install -y git
-            fi
-
-            if [ -d /opt/fastapi-logging ] && [ -z "$(ls -A /opt/fastapi-logging)" ]; then
-              echo "🧹 Cleaning empty /opt/fastapi-logging..."
-              rm -rf /opt/fastapi-logging
-            fi
-
-            if [ ! -d /opt/fastapi-logging ]; then
-              echo "📁 Cloning repo from Vreij-Lal (main branch)..."
-              git clone --branch main https://github.com/Vreij-Lal/infra.git /opt/fastapi-logging
-              if [ $? -ne 0 ]; then
-                echo "❌ Failed to clone repo. Exiting."
-                exit 1
-              fi
-            fi
-
-            cd /opt/fastapi-logging
-
-            echo "🗄️ Backing up .env if it exists..."
-            [ -f .env ] && cp .env /tmp/.env.bak
-
-            echo "🔄 Pulling latest main code..."
-            git fetch origin main
-            git reset --hard origin/main
-
-            echo "♻️ Restoring .env if it was backed up..."
-            [ -f /tmp/.env.bak ] && mv /tmp/.env.bak .env
-
-            if [ ! -f docker-compose.yml ]; then
-              echo "❌ docker-compose.yml not found. Exiting."
+            # 📁 Clone latest code
+            git clone --branch main https://github.com/Vreij-Lal/infra.git /opt/fastapi-logging
+            if [ $? -ne 0 ]; then
+              echo "❌ Failed to clone repo. Exiting."
               exit 1
             fi
 
-            echo "📦 Pulling Docker images..."
-            docker compose pull
+            # ♻️ Restore .env
+            [ -f /tmp/.env.bak ] && mv /tmp/.env.bak /opt/fastapi-logging/.env
 
-            echo "🔧 Rebuilding and starting the full stack..."
+            cd /opt/fastapi-logging
+
+            # 📦 Ensure docker compose is available
+            if ! docker compose version &>/dev/null; then
+              apt update && apt install -y docker-compose-plugin
+            fi
+
+            # 🔧 Rebuild and launch
+            docker compose pull
             docker compose down -v
             docker compose up -d --build
 
-            echo "✅ Current running containers:"
+            # ✅ Status
             docker ps
 
-            echo "🧪 Checking FastAPI health..."
+            # 🧪 Test health
             curl -s http://localhost:8000 || echo "⚠️ FastAPI not responding"
 
             echo "🌐 FastAPI: http://${{ secrets.SSH_HOST }}:8000"
