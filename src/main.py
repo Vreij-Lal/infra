@@ -16,8 +16,11 @@ from src.middlewares.logging import LoggingMiddleware
 from src.logger import logger
 from src.database.core import engine
 from src.sql.migrations.migrations import users, audit_logs
+import os
 
 app = FastAPI()
+os.makedirs("logs", exist_ok=True) 
+
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
