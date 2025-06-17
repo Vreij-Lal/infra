@@ -19,10 +19,10 @@ from src.sql.migrations.migrations import users, audit_logs
 
 app = FastAPI()
 
-app.add_middleware(InputSanitizationMiddleware)
-app.add_middleware(LoggingMiddleware)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(InputSanitizationMiddleware)   
+app.add_middleware(LoggingMiddleware)              
 
 app.include_router(user_router)
 
