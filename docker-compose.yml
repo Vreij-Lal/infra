@@ -25,9 +25,8 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
-    command: >
-      sh -c "python src/scripts/run_migrations.py &&
-             uvicorn src.main:app --host 0.0.0.0 --port 8000"
+    restart: unless-stopped
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
     depends_on:
       db:
         condition: service_healthy
