@@ -16,15 +16,6 @@ services:
       timeout: 5s
       retries: 5
 
-  migrate:
-    build: .
-    command: ["python", "src/scripts/run_migrations.py"]
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-
   fastapi:
     build: .
     container_name: fastapi
@@ -34,8 +25,12 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
+    command: >
+      sh -c "python src/scripts/run_migrations.py &&
+             uvicorn src.main:app --host 0.0.0.0 --port 8000"
     depends_on:
-      - migrate
+      db:
+        condition: service_healthy
 
   loki:
     image: grafana/loki:2.9.0
