@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   fastapi:
-    build: .
+    build: .  # or use `image: your_image_name` if you're not building
     container_name: fastapi
     ports:
       - "8000:8000"
@@ -16,7 +16,6 @@ services:
 
   db:
     image: mysql:8
-    container_name: mysql_db
     restart: always
     env_file:
       - .env
@@ -25,7 +24,7 @@ services:
       - ./mysql-init-template.sql:/docker-entrypoint-initdb.d/mysql-init-template.sql:ro
       - ./generate-init.sh:/docker-entrypoint-initdb.d/00-generate-init.sh:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
