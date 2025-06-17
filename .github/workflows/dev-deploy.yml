@@ -1,0 +1,96 @@
+name: Build, Push Docker Image, and Deploy via SSH
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  docker-build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push FastAPI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/fastapi-actions-demo:dev-latest
+
+  deploy-via-ssh:
+    needs: docker-build-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Full Stack via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "🚀 Connecting to server..."
+
+            # Stop and remove any old standalone container
+            if [ "$(docker ps -aq -f name=fastapi-demo)" ]; then
+              echo "🧹 Removing old standalone container..."
+              docker stop fastapi-demo || true
+              docker rm fastapi-demo || true
+            fi
+
+            # Ensure Docker Compose plugin is installed
+            if ! docker compose version &>/dev/null; then
+              echo "🧩 Installing Docker Compose plugin..."
+              apt update && apt install -y docker-compose-plugin
+            fi
+
+            # Ensure Git is installed
+            if ! command -v git &>/dev/null; then
+              echo "📦 Installing Git..."
+              apt update && apt install -y git
+            fi
+
+            # Clean empty folder if exists
+            if [ -d /opt/fastapi-logging ] && [ -z "$(ls -A /opt/fastapi-logging)" ]; then
+              echo "🧹 Cleaning empty /opt/fastapi-logging..."
+              rm -rf /opt/fastapi-logging
+            fi
+
+            # Clone the repo via SSH if not already present
+            if [ ! -d /opt/fastapi-logging ]; then
+              echo "📁 Cloning repo from Vreij-Lal (dev branch)..."
+              git clone --branch dev git@github.com:Vreij-Lal/infra.git /opt/fastapi-logging
+            fi
+
+            cd /opt/fastapi-logging
+
+            echo "🔄 Pulling latest dev code..."
+            git fetch origin dev
+            git reset --hard origin/dev
+
+            # Check if docker-compose.yml exists
+            if [ ! -f docker-compose.yml ]; then
+              echo "❌ docker-compose.yml not found. Exiting."
+              exit 1
+            fi
+
+            echo "📦 Pulling Docker images..."
+            docker compose pull
+
+            echo "🔧 Rebuilding and starting the full stack..."
+            docker compose down
+            docker compose up -d --build
+
+            echo "✅ Current running containers:"
+            docker ps
+
+            echo "🧪 Checking FastAPI health..."
+            curl -s http://localhost:8000 || echo "⚠️ FastAPI not responding"
+
+            echo "🌐 FastAPI: http://${{ secrets.SSH_HOST }}:8000"
+            echo "📊 Grafana: http://${{ secrets.SSH_HOST }}:3000"

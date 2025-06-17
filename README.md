@@ -1,0 +1,1 @@
+# 🐍 Python FastAPI Clean Architecture Project Template
