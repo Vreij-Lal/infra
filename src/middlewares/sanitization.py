@@ -57,18 +57,24 @@ class BlockMaliciousPayloadMiddleware(BaseHTTPMiddleware):
 
 import json
 import re
+import logging
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+logger = logging.getLogger("malicious-filter")
+logging.basicConfig(level=logging.INFO)
 
 malicious_patterns = [
     re.compile(r"<script", re.IGNORECASE),
     re.compile(r"href\s*=\s*['\"]javascript:", re.IGNORECASE),
     re.compile(r"src\s*=\s*['\"]javascript:", re.IGNORECASE),
-    re.compile(r"\bon[a-zA-Z]{2,}\s*=", re.IGNORECASE),  # e.g., onclick=
+    re.compile(r"\bon[a-zA-Z]{2,}\s*=", re.IGNORECASE),
     re.compile(r"\bOR\s+1\s*=\s*1\b", re.IGNORECASE),
     re.compile(r"\bDROP\s+TABLE\b", re.IGNORECASE),
-    re.compile(r"\bUNION\s+SELECT\b", re.IGNORECASE)
+    re.compile(r"\bUNION\s+SELECT\b", re.IGNORECASE),
+    re.compile(r"<iframe", re.IGNORECASE),
+    re.compile(r"eval\s*\(", re.IGNORECASE),
 ]
 
 class BlockMaliciousPayloadMiddleware:
@@ -116,13 +122,14 @@ class BlockMaliciousPayloadMiddleware:
             return False
 
         if contains_malicious(data):
+            logger.warning("Blocked malicious request to %s", str(request.url))
             response = JSONResponse(
                 status_code=400,
                 content={"detail": "Request blocked due to suspected malicious content."}
             )
             await response(scope, receive, send)
             return
-        
+
         async def receive_with_body() -> dict:
             return {"type": "http.request", "body": body, "more_body": False}
 
