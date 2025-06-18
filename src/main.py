@@ -21,10 +21,10 @@ import os
 app = FastAPI()
 os.makedirs("logs", exist_ok=True) 
 
+app.add_middleware(InputSanitizationMiddleware)
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
-app.add_middleware(InputSanitizationMiddleware)   
 app.add_middleware(LoggingMiddleware)              
 
 app.include_router(user_router)
