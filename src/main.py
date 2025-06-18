@@ -94,10 +94,6 @@ from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.users.router import router as user_router
 from src.utils.response_builder import make_response
@@ -106,21 +102,13 @@ from src.middlewares.logging import LoggingMiddleware
 from src.logger import logger
 from src.database.core import engine
 from src.sql.migrations.migrations import users, audit_logs
+import os
 
 os.makedirs("logs", exist_ok=True) 
-limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
-app.add_middleware(BaseHTTPMiddleware, dispatch=limiter.middleware)  
-app.add_middleware(BlockMaliciousPayloadMiddleware)
-app.add_middleware(LoggingMiddleware) 
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_error_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Rate limit exceeded. Try again later."}
-    )             
 
-app.state.limiter = limiter
+app.add_middleware(BlockMaliciousPayloadMiddleware)
+app.add_middleware(LoggingMiddleware)              
 
 app.include_router(user_router)
 
@@ -150,14 +138,14 @@ async def initialize_database():
             with engine.begin() as conn:
                 conn.execute(text(users))
                 conn.execute(text(audit_logs))
-            logger.info("✅ Database tables initialized successfully")
+            logger.info("Database tables initialized successfully")
             return
         except (OperationalError, SQLAlchemyError) as e:
-            logger.warning(f"⏳ Attempt {attempt + 1}/{max_retries} - DB not ready: {e}")
+            logger.warning(f"Attempt {attempt + 1}/{max_retries} - DB not ready: {e}")
             time.sleep(delay)
         except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}")
+            logger.error(f"Unexpected error: {e}")
             raise
 
-    logger.error("❌ Failed to initialize database after multiple retries")
+    logger.error("Failed to initialize database after multiple retries")
     raise RuntimeError("Database init failed")
