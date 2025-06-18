@@ -1,41 +1,55 @@
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.status import HTTP_400_BAD_REQUEST
 import json
 import re
 import bleach
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
+from src.utils.response_builder import make_response
 from src.logger import logger
 
 class InputSanitizationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if request.method in ("POST", "PUT", "PATCH"):
-            body = await request.body()
-            if body:
-                try:
-                    data = json.loads(body)
-                    sanitized = self._sanitize_data(data)
-                    new_body = json.dumps(sanitized).encode("utf-8")
+            try:
+                body_bytes = await request.body()
+                if not body_bytes:
+                    return await call_next(request)
 
-                    async def receive():
-                        return {"type": "http.request", "body": new_body}
-
-                    request._receive = receive
-                    logger.info("🛡 InputSanitizationMiddleware applied to request body")
-                    logger.debug(f"Sanitized body: {sanitized}")
-
-                except Exception as e:
-                    logger.warning(f"Sanitization failed: {e}")
+                body = json.loads(body_bytes)
+                if not self._is_clean(body):
+                    logger.warning("🚫 Malicious input detected")
+                    return JSONResponse(
+                        status_code=HTTP_400_BAD_REQUEST,
+                        content=make_response(
+                            data=None,
+                            status=HTTP_400_BAD_REQUEST,
+                            message="Invalid or potentially dangerous input detected."
+                        )
+                    )
+            except Exception as e:
+                logger.warning(f"🛑 Failed to inspect input: {e}")
+                return JSONResponse(
+                    status_code=HTTP_400_BAD_REQUEST,
+                    content=make_response(
+                        data=None,
+                        status=HTTP_400_BAD_REQUEST,
+                        message="Malformed request body."
+                    )
+                )
 
         return await call_next(request)
 
-    def _sanitize_data(self, data):
-        if isinstance(data, dict):
-            return {k: self._sanitize_data(v) for k, v in data.items()}
-        elif isinstance(data, list):
-            return [self._sanitize_data(i) for i in data]
-        elif isinstance(data, str):
-            value = data.strip()
-            value = bleach.clean(value)
-            value = re.sub(r'[^\x00-\x7F]+', '', value)
-            value = re.sub(r'(--|\b(select|insert|delete|drop|update|or|and)\b)', '', value, flags=re.IGNORECASE)
-            return value
-        return data
+    def _is_clean(self, data):
+        def contains_dangerous(value):
+            if isinstance(value, str):
+                stripped = bleach.clean(value).strip()
+                # Simple blacklist keywords or patterns
+                return bool(re.search(r'\b(select|insert|delete|drop|update|or|and)\b|--|<script', stripped, re.IGNORECASE))
+            elif isinstance(value, list):
+                return any(contains_dangerous(v) for v in value)
+            elif isinstance(value, dict):
+                return any(contains_dangerous(v) for v in value.values())
+            return False
+
+        return not contains_dangerous(data)
