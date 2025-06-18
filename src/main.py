@@ -25,9 +25,11 @@ app = FastAPI()
 
 app.add_middleware(BlockMaliciousPayloadMiddleware)
 
-app.state.limiter = limiter
+
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(LoggingMiddleware)              
+
+app.state.limiter = limiter
 
 app.include_router(user_router)
 
@@ -68,3 +70,16 @@ async def initialize_database():
 
     logger.error("❌ Failed to initialize database after multiple retries")
     raise RuntimeError("Database init failed")
+
+
+
+# Rate-limit exceeded exception handler (customized)
+from slowapi.errors import RateLimitExceeded
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"Rate limit exceeded for {request.url}")
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Try again later."}
+    )
