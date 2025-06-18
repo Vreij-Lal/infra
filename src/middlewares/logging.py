@@ -15,7 +15,7 @@ class LoggingMiddleware:
             return
 
         request = Request(scope, receive)
-        logger.info(f"📥 Request receivedzzz: {request.method} {request.url}")
+        logger.info(f"📥 Request received: {request.method} {request.url}")
         start_time = time.time()
 
         async def send_wrapper(message):
