@@ -102,13 +102,14 @@ from src.middlewares.logging import LoggingMiddleware
 from src.logger import logger
 from src.database.core import engine
 from src.sql.migrations.migrations import users, audit_logs
-import os
+from src.middlewares.rate_limiter import RateLimiterMiddleware
 
 os.makedirs("logs", exist_ok=True) 
 app = FastAPI()
 
 app.add_middleware(BlockMaliciousPayloadMiddleware)
-app.add_middleware(LoggingMiddleware)              
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(RateLimiterMiddleware, max_requests=5, period=60)              
 
 app.include_router(user_router)
 
