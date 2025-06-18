@@ -1,3 +1,4 @@
+'''
 import os
 import time
 from fastapi import FastAPI, Request
@@ -83,3 +84,102 @@ async def rate_limit_error_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={"detail": "Rate limit exceeded. Try again later."}
     )
+'''
+
+
+import os
+import time
+from fastapi import FastAPI, Request
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from src.users.router import router as user_router
+from src.utils.response_builder import make_response
+from src.middlewares.sanitization import BlockMaliciousPayloadMiddleware
+from src.middlewares.logging import LoggingMiddleware
+from src.logger import logger
+from src.database.core import engine
+from src.sql.migrations.migrations import users, audit_logs
+from src.database.core import SessionLocal
+from src.users.service import create_user, get_all_users, get_user_by_id, update_user, delete_user
+from src.users.models import UserIn, UserOut
+from src.utils.response_models import GenericResponse
+from dotenv import load_dotenv
+
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
+# Load environment variables
+load_dotenv()
+IS_DEV = os.getenv("ENV", "dev") == "dev"
+
+# Initialize FastAPI app
+app = FastAPI()
+
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
+# Add middlewares
+app.add_middleware(BaseHTTPMiddleware, dispatch=limiter.middleware)  # Ensure rate limit middleware comes first
+app.add_middleware(BlockMaliciousPayloadMiddleware)
+app.add_middleware(LoggingMiddleware)
+
+# Apply the rate limit to the app state
+app.state.limiter = limiter
+
+# Include user router
+app.include_router(user_router)
+
+# Healthcheck route
+@app.get("/healthcheck")
+def root():
+    logger.info("Healthcheck endpoint hit")
+    return {"message": "I AM ALIVE"}
+
+# Exception handler for RequestValidationError (validation errors)
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    logger.warning(f"Validation Error on {request.url}: {errors}")
+    first_msg = errors[0].get("msg", "Validation error.") if errors else "Validation error."
+    return JSONResponse(
+        status_code=HTTP_422_UNPROCESSABLE_ENTITY,
+        content=make_response(data=None, status=HTTP_422_UNPROCESSABLE_ENTITY, message=first_msg)
+    )
+
+# Exception handler for rate-limit exceeded
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error_handler(request: Request, exc: RateLimitExceeded):
+    logger.warning(f"Rate limit exceeded for {request.url}")
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Try again later."}
+    )
+
+# Database initialization on startup
+@app.on_event("startup")
+async def initialize_database():
+    max_retries = 10
+    delay = 3
+    for attempt in range(max_retries):
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(users))
+                conn.execute(text(audit_logs))
+            logger.info("✅ Database tables initialized successfully")
+            return
+        except (OperationalError, SQLAlchemyError) as e:
+            logger.warning(f"⏳ Attempt {attempt + 1}/{max_retries} - DB not ready: {e}")
+            time.sleep(delay)
+        except Exception as e:
+            logger.error(f"❌ Unexpected error: {e}")
+            raise
+    logger.error("❌ Failed to initialize database after multiple retries")
+    raise RuntimeError("Database init failed")
