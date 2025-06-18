@@ -28,6 +28,7 @@ class LoggingMiddleware:
         await self.app(scope, receive, send_wrapper)
 '''
 
+'''
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.requests import Request
 from src.logger import logger
@@ -69,3 +70,4 @@ class LoggingMiddleware:
             await send(message)
 
         await self.app(scope, buffered_receive, send_wrapper)
+'''
