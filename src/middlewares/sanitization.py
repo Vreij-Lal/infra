@@ -43,17 +43,26 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
     def _is_clean(self, data):
         def contains_dangerous(value):
             if isinstance(value, str):
+                # Clean the value using bleach to remove potentially harmful HTML
                 stripped = bleach.clean(value, tags=["b", "i", "u", "a", "p", "br"], strip=True)
-                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and|from|exec|grant|waitfor|sleep)\b'
+
+                # Enhanced SQL Injection pattern (catching more variants)
+                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and|from|exec|grant|waitfor|sleep|group by|1=1|limit)\b'
                 if re.search(sql_keywords, stripped, re.IGNORECASE):
                     return True
+
+                # Enhanced XSS prevention: look for <script> tags, event handlers, javascript URLs, and iframe tags
                 xss_keywords = (
-                    r'<script.*?>.*?</script>|'
-                    r'<.*?on\w+=".*?".*?>|'
-                    r'javascript:.*?alert\(|'
-                    r'<iframe.*?>.*?</iframe>'
+                    r'<script.*?>.*?</script>|'  # Match <script> tags
+                    r'<.*?on\w+=".*?".*?>|'  # Match event handlers (e.g., onerror, onclick, etc.)
+                    r'javascript:.*?alert\(|'  # Match javascript URLs (e.g., javascript:alert(1))
+                    r'<iframe.*?>.*?</iframe>'  # Match iframe tags
                 )
                 if re.search(xss_keywords, stripped, re.IGNORECASE):
+                    return True
+
+                # Specifically check for javascript in href or src attributes
+                if re.search(r'(href|src)="javascript:.*?"', stripped, re.IGNORECASE):
                     return True
 
             elif isinstance(value, list):
