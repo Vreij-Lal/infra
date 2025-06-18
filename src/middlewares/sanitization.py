@@ -3,7 +3,7 @@ import re
 import bleach
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from src.logger import logger  # Or use print() if logger not working
+from src.logger import logger
 
 class InputSanitizationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

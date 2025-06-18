@@ -12,4 +12,4 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Invalid or expired token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return payload  # Or extract user id/email
+    return payload
