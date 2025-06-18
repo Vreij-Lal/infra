@@ -18,8 +18,10 @@ from src.database.core import engine
 from src.sql.migrations.migrations import users, audit_logs
 import os
 
-app = FastAPI()
+
 os.makedirs("logs", exist_ok=True) 
+app = FastAPI()
+
 
 app.add_middleware(InputSanitizationMiddleware)
 
