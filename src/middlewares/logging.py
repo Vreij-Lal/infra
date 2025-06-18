@@ -28,13 +28,10 @@ class LoggingMiddleware:
         await self.app(scope, receive, send_wrapper)
 '''
 
-from starlette.middleware.base import RequestResponseEndpoint
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.requests import Request
-from starlette.responses import Response
 from src.logger import logger
 import time
-import anyio
 
 class LoggingMiddleware:
     def __init__(self, app: ASGIApp):
@@ -45,7 +42,7 @@ class LoggingMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Step 1: Fully buffer the original receive stream
+        # Step 1: buffer all messages from the original receive
         messages = []
         while True:
             message = await receive()
@@ -53,14 +50,14 @@ class LoggingMiddleware:
             if message["type"] == "http.request" and not message.get("more_body", False):
                 break
 
-        # Step 2: Create a new receive() that replays the buffered messages
+        # Step 2: replay + simulate disconnect
         async def buffered_receive():
-            if messages:
-                return messages.pop(0)
-            else:
-                await anyio.sleep(3600)  # shouldn't happen
-                raise RuntimeError("No more messages to receive")
+            if buffered_receive.messages:
+                return buffered_receive.messages.pop(0)
+            return {"type": "http.disconnect"}
+        buffered_receive.messages = messages.copy()
 
+        # Logging
         request = Request(scope, buffered_receive)
         logger.info(f"📥 Request received: {request.method} {request.url}")
         start_time = time.time()

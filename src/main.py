@@ -108,7 +108,7 @@ os.makedirs("logs", exist_ok=True)
 app = FastAPI()
 
 app.add_middleware(BlockMaliciousPayloadMiddleware)
-app.add_middleware(LoggingMiddleware)
+#app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimiterMiddleware, max_requests=5, period=60)              
 
 app.include_router(user_router)
