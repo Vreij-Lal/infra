@@ -43,15 +43,10 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
     def _is_clean(self, data):
         def contains_dangerous(value):
             if isinstance(value, str):
-                # Clean the value using bleach to remove potentially harmful HTML
                 stripped = bleach.clean(value, tags=["b", "i", "u", "a", "p", "br"], strip=True)
-
-                # Enhanced SQL Injection pattern (more SQL keywords)
-                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and|from)\b'
+                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and|from|exec|grant|waitfor|sleep)\b'
                 if re.search(sql_keywords, stripped, re.IGNORECASE):
                     return True
-
-                # Enhanced XSS prevention: look for <script> tags, JavaScript event handlers, and javascript URLs
                 xss_keywords = (
                     r'<script.*?>.*?</script>|'
                     r'<.*?on\w+=".*?".*?>|'
