@@ -112,7 +112,7 @@ from src.users.service import create_user, get_all_users, get_user_by_id, update
 from src.users.models import UserIn, UserOut
 from src.utils.response_models import GenericResponse
 from dotenv import load_dotenv
-
+os.makedirs("logs", exist_ok=True)
 # Initialize limiter
 limiter = Limiter(key_func=get_remote_address)
 
@@ -124,7 +124,7 @@ IS_DEV = os.getenv("ENV", "dev") == "dev"
 app = FastAPI()
 
 # Ensure logs directory exists
-os.makedirs("logs", exist_ok=True)
+
 
 # Add middlewares
 app.add_middleware(BaseHTTPMiddleware, dispatch=limiter.middleware)  # Ensure rate limit middleware comes first
