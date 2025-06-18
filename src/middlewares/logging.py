@@ -45,34 +45,30 @@ class LoggingMiddleware:
             await self.app(scope, receive, send)
             return
 
-        receive_stream, send_stream = anyio.create_memory_object_stream()
+        # Step 1: Fully buffer the original receive stream
+        messages = []
+        while True:
+            message = await receive()
+            messages.append(message)
+            if message["type"] == "http.request" and not message.get("more_body", False):
+                break
 
+        # Step 2: Create a new receive() that replays the buffered messages
         async def buffered_receive():
-            try:
-                return await receive_stream.receive()
-            except Exception as e:
-                logger.error(f"Error in buffered receive: {e}")
-                raise
+            if messages:
+                return messages.pop(0)
+            else:
+                await anyio.sleep(3600)  # shouldn't happen
+                raise RuntimeError("No more messages to receive")
 
-        async def buffer_messages():
-            async with send_stream:
-                while True:
-                    message = await receive()
-                    await send_stream.send(message)
-                    if message["type"] == "http.request" and not message.get("more_body", False):
-                        break
+        request = Request(scope, buffered_receive)
+        logger.info(f"📥 Request received: {request.method} {request.url}")
+        start_time = time.time()
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(buffer_messages)
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                duration = time.time() - start_time
+                logger.info(f"📤 Response sent: {message['status']} ({duration:.4f}s)")
+            await send(message)
 
-            request = Request(scope, buffered_receive)
-            logger.info(f"📥 Request received: {request.method} {request.url}")
-            start_time = time.time()
-
-            async def send_wrapper(message):
-                if message["type"] == "http.response.start":
-                    duration = time.time() - start_time
-                    logger.info(f"📤 Response sent: {message['status']} ({duration:.4f}s)")
-                await send(message)
-
-            await self.app(scope, buffered_receive, send_wrapper)
+        await self.app(scope, buffered_receive, send_wrapper)
