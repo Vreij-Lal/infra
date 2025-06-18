@@ -9,7 +9,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.users.router import router as user_router
 from src.utils.response_builder import make_response
-from src.middlewares.sanitization import InputSanitizationMiddleware
+from src.middlewares.sanitization import BlockMaliciousPayloadMiddleware
 from src.extensions.limiter import limiter
 from slowapi.middleware import SlowAPIMiddleware
 from src.middlewares.logging import LoggingMiddleware
@@ -23,7 +23,7 @@ os.makedirs("logs", exist_ok=True)
 app = FastAPI()
 
 
-app.add_middleware(InputSanitizationMiddleware)
+app.add_middleware(BlockMaliciousPayloadMiddleware)
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
