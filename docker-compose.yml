@@ -30,6 +30,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   loki:
     image: grafana/loki:2.9.0
@@ -46,7 +51,8 @@ services:
       - ./promtail-config.yaml:/etc/promtail/config.yaml
     command: -config.file=/etc/promtail/config.yaml
     depends_on:
-      - fastapi
+      fastapi:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:10.4.1
