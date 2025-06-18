@@ -1,12 +1,12 @@
-from starlette.middleware.base import BaseHTTPMiddleware  # For creating middleware
-from starlette.requests import Request  # For handling the request object
-from starlette.responses import JSONResponse  # For sending responses
-import json
-import re
 import bleach
+import re
+import json
+from starlette.responses import JSONResponse
+from starlette.status import HTTP_400_BAD_REQUEST
 from src.utils.response_builder import make_response
 from src.logger import logger
-from starlette.status import HTTP_400_BAD_REQUEST
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 class InputSanitizationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -43,14 +43,22 @@ class InputSanitizationMiddleware(BaseHTTPMiddleware):
     def _is_clean(self, data):
         def contains_dangerous(value):
             if isinstance(value, str):
-                cleaned_value = bleach.clean(value, tags=["b", "i", "u", "a"], strip=True)
-                
-                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and)\b'
-                if re.search(sql_keywords, cleaned_value, re.IGNORECASE):
+                # Clean the value using bleach to remove potentially harmful HTML
+                stripped = bleach.clean(value, tags=["b", "i", "u", "a", "p", "br"], strip=True)
+
+                # Enhanced SQL Injection pattern (more SQL keywords)
+                sql_keywords = r'\b(select|insert|delete|drop|update|alter|create|exec|union|--|;|or|and|from)\b'
+                if re.search(sql_keywords, stripped, re.IGNORECASE):
                     return True
 
-                xss_keywords = r'<script.*?>.*?</script>|<.*?on\w+=".*?".*?>'
-                if re.search(xss_keywords, cleaned_value, re.IGNORECASE):
+                # Enhanced XSS prevention: look for <script> tags, JavaScript event handlers, and javascript URLs
+                xss_keywords = (
+                    r'<script.*?>.*?</script>|'
+                    r'<.*?on\w+=".*?".*?>|'
+                    r'javascript:.*?alert\(|'
+                    r'<iframe.*?>.*?</iframe>'
+                )
+                if re.search(xss_keywords, stripped, re.IGNORECASE):
                     return True
 
             elif isinstance(value, list):
