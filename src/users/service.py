@@ -6,6 +6,8 @@ from src.users.models import UserIn, UserOut
 from src.utils.db_error_parser import handle_sql_error
 from src.utils.exceptions import AppException
 from src.logger import logger
+from src.utils.pagination import paginate_raw_query
+from src.utils.paginated_response import PaginatedResponse
 
 def create_user(session: Session, data: UserIn) -> UserOut:
     logger.debug(f"Creating user with data: {data}")
@@ -23,14 +25,24 @@ def create_user(session: Session, data: UserIn) -> UserOut:
         handle_sql_error(e, entity="User")
 
 
-def get_all_users(session: Session) -> list[UserOut]:
-    logger.debug("Getting all users")
+def get_all_users(session: Session, page: int, size: int) -> PaginatedResponse[UserOut]:
+    logger.debug(f"Getting paginated users - page: {page}, size: {size}")
     try:
-        stmt = text(load_sql("users/get_all_users.sql"))
-        rows = session.execute(stmt).all()
-        users = [UserOut(**r._mapping) for r in rows]
-        logger.info(f"Retrieved {len(users)} users")
-        return users
+        data_sql = load_sql("users/get_all_users.sql")
+        count_sql = load_sql("users/count_users.sql")
+
+        paginated = paginate_raw_query(
+            session=session,
+            data_sql=data_sql,
+            count_sql=count_sql,
+            model=UserOut,
+            page=page,
+            size=size
+        )
+
+        logger.info(f"Retrieved {len(paginated.data)} users out of {paginated.total}")
+        return paginated
+
     except SQLAlchemyError as e:
         logger.exception("Database error during get_all_users")
         handle_sql_error(e, entity="User")
